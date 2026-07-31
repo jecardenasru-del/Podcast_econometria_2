@@ -1,16 +1,9 @@
 """
-==============================================================================
+=============================================================================
 Trabajo 2 - Econometria II | Podcast: Datos Panel
 Leyes de Portacion de Armas y Delincuencia -- VERSION CON DIAGNOSTICOS COMPLETOS
 ==============================================================================
-Este script parte de la logica de Guns.py (referencia del curso) y agrega:
-  1) Bateria completa de pruebas sobre los residuos (autocorrelacion,
-     normalidad, heterocedasticidad, dependencia transversal).
-  2) Correcciones cuando un supuesto falla (SE robustos clustered,
-     SE de Driscoll-Kraay).
-  3) Un criterio explicito de seleccion de modelo final.
 """
-
 #%% 0) Librerias
 import numpy as np
 import pandas as pd
@@ -30,7 +23,7 @@ sns.set_style("whitegrid")
 pd.set_option("display.width", 120)
 pd.set_option("display.max_columns", 20)
 
-#%% Funciones auxiliares (tomadas de Guns.py, sin cambios)
+#%%Funciones auxiliares
 def pvar_summary(df, entity_col, time_col):
     novar_time, novar_ind = [], []
     for col in df.columns:
@@ -162,11 +155,9 @@ def wald_modificado_heterocedasticidad_grupal(fe_result, entity_name="state"):
     return stat, df, pval
 
 #%% 1) Carga y limpieza de datos
-# NOTA: ajuste esta ruta a la ubicacion real del archivo en su equipo.
-RUTA = r"Podcats\guns_panel_extendido_1979_2022.csv"
+RUTA = "guns_panel_extendido_1979_2022.csv"
 guns = pd.read_csv(RUTA)
 guns = guns.rename(columns={"state_abbr": "state"})
-
 filas_incompletas = guns[guns[["population", "violent", "murder", "robbery"]].isnull().any(axis=1)]
 if len(filas_incompletas):
     print(f"Se descartan {len(filas_incompletas)} fila(s) con datos faltantes:")
@@ -229,7 +220,7 @@ print(f"LM Breusch-Pagan/Honda (Pooled vs EA): chi2({df_ind}) = {lm_ind:.3f}, p 
 hausman_stat, hausman_df, hausman_p = hausman_test(fixed, random)
 print(f"Hausman: chi2({hausman_df}) = {hausman_stat:.3f}, p = {hausman_p:.4g}")
 
-#%% 6) BATERIA DE DIAGNOSTICOS SOBRE EL MODELO ELEGIDO (EF)
+#%% 6) MODELO ELEGIDO (EF)
 # Se asume, sujeto a lo que arroje el Hausman, que EF es el modelo de partida
 # por argumento economico (cultura politica/institucional no observada del
 # estado esta correlacionada con adoptar leyes de portacion mas laxas).
@@ -242,7 +233,7 @@ print(f"JB = {jb_stat:.3f}, p = {jb_p:.4g}, asimetria = {skew:.3f}, curtosis = {
 # H0: los residuos son normales. Con N grande (miles de obs) el Teorema Central
 # del Limite garantiza que los estimadores siguen siendo asintoticamente
 # normales aunque se rechace H0; no invalida el modelo, solo indica que los
-# p-values "exactos" en muestras pequenas no aplicarian (aqui no es el caso).
+# p-values "exactos" en muestras pequenas no aplicarian 
 
 print("\n=== 6.2 HETEROCEDASTICIDAD ===")
 het_res = bp_white_heterocedasticidad(resid_fe, X)
@@ -252,11 +243,7 @@ print(f"White:         LM = {het_res['White_LM']:.3f}, p = {het_res['White_LM_p'
 wald_stat, wald_df, wald_p = wald_modificado_heterocedasticidad_grupal(fixed, "state")
 print(f"Wald modificado (heterocedasticidad ENTRE estados): "
       f"chi2({wald_df}) = {wald_stat:.3f}, p = {wald_p:.4g}")
-# H0 (los tres tests): homocedasticidad. Es muy comun rechazar esta hipotesis
-# en panel de estados: California y Texas tienen escalas de poblacion y
-# crimen muy distintas a Wyoming o Vermont -> varianza del error distinta
-# por estado.
-
+# H0 (los tres tests): homocedasticidad. 
 print("\n=== 6.3 AUTOCORRELACION SERIAL: Wooldridge ===")
 coef_fe, se_fe, t_fe, p_fe = wooldridge_serial_test(FD, h0="fe")
 print(f"coef(e_lag) = {coef_fe:.4f} (H0: -0.5), t = {t_fe:.3f}, p = {p_fe:.4g}")
@@ -268,20 +255,11 @@ print(f"coef(e_lag) = {coef_fe:.4f} (H0: -0.5), t = {t_fe:.3f}, p = {p_fe:.4g}")
 print("\n=== 6.4 DEPENDENCIA TRANSVERSAL: Pesaran CD ===")
 cd_stat, cd_p = pesaran_cd_test(resid_fe)
 print(f"CD = {cd_stat:.3f}, p = {cd_p:.4g}")
-# H0: no hay dependencia transversal. Es plausible rechazarla: shocks
-# nacionales de crimen (crack epidemic, COVID, tendencias federales) afectan
-# a todos los estados al tiempo, generando correlacion contemporanea entre
-# residuos de distintos estados. Los efectos de tiempo (time_effects=True)
-# ya deberian capturar buena parte de esto, pero puede quedar dependencia
-# residual (p. ej. regional).
+# H0: no hay dependencia transversal. Es plausible rechazarla
 
 #%% 7) CORRECCIONES SEGUN LO QUE FALLE EN 6)
 # Regla de decision:
-#  - Heterocedasticidad y/o autocorrelacion (sin dependencia transversal
-#    fuerte)  -> errores estandar clustered por entidad (robustos a ambas).
-#  - Si ademas hay dependencia transversal              -> Driscoll-Kraay.
-#  - Si solo falla normalidad y N es grande             -> no requiere
-#    correccion (CLT), se reporta y se sigue.
+#  - Heterocedasticidad y/o autocorrelacion -> usar SE robustos clustered por estado
 
 print("\n=== 7.1 CORRECCION: SE clustered por estado ===")
 fixed_clustered = PanelOLS(y, X_plain_const, entity_effects=True, time_effects=True).fit(
